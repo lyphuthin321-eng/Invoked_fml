@@ -80,85 +80,39 @@ jobs:
           Write-Host "🎯 Cấu hình hoàn tất!" -ForegroundColor Green
 
       # TẠO USER PREMIUM - (tối ưu mật khẩu)
-      - name: 👤 TẠO TÀI KHOẢN PREMIUM
+- name: 👤 TẠO TÀI KHOẢN RDP
         run: |
           Write-Host ""
-          Write-Host "👤 ĐANG TẠO TÀI KHOẢN PREMIUM" -ForegroundColor Yellow
-          
-          # Hàm tạo password ngắn (8 ký tự) đảm bảo có ít nhất 1 chữ hoa, 1 chữ thường, 1 số
-          function New-PremiumPassword {
-              param()
-              $upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'   # loại I,O để tránh nhầm
-              $lower = 'abcdefghijkmnpqrstuvwxyz'
-              $numbers = '23456789'               # loại 0,1 để tránh nhầm
-              $all = $upper + $lower + $numbers
+          Write-Host "👤 TẠO USER RDP CỐ ĐỊNH" -ForegroundColor Yellow
 
-              # đảm bảo 1 chữ hoa, 1 chữ thường, 1 chữ số
-              $pw = ''
-              $pw += $upper[(Get-Random -Minimum 0 -Maximum $upper.Length)]
-              $pw += $lower[(Get-Random -Minimum 0 -Maximum $lower.Length)]
-              $pw += $numbers[(Get-Random -Minimum 0 -Maximum $numbers.Length)]
+          $user = "123456"
+          $pass = "123456"
 
-              # thêm ký tự ngẫu nhiên để đủ 8 ký tự
-              for ($i = 1; $i -le 5; $i++) {
-                  $pw += $all[(Get-Random -Minimum 0 -Maximum $all.Length)]
-              }
+          $securePass = ConvertTo-SecureString $pass -AsPlainText -Force
 
-              # trộn ngẫu nhiên vị trí các ký tự rồi trả về
-              return -join ($pw.ToCharArray() | Sort-Object { Get-Random })
-          }
-
-          # Nếu người dùng đặt mật khẩu tùy chỉnh (ví dụ bằng secret) thì ưu tiên dùng
-          if ($env:CUSTOM_RDP_PASS) {
-              $matKhau = $env:CUSTOM_RDP_PASS
-              Write-Host "│ ℹ️  Dùng mật khẩu tùy chỉnh từ env" -ForegroundColor Blue
-          } else {
-              $matKhau = New-PremiumPassword
-          }
-
-          $securePass = ConvertTo-SecureString $matKhau -AsPlainText -Force
-          
           # Xóa user cũ nếu tồn tại
-          try {
-              Remove-LocalUser -Name "AISTV-PREMIUM" -ErrorAction SilentlyContinue
-              Write-Host "│ ✅ Đã xóa user cũ" -ForegroundColor Green
-          } catch {
-              Write-Host "│ ℹ️  Không có user cũ để xóa" -ForegroundColor Blue
-          }
-          
-          # Tạo user mới với đầy đủ quyền
-          try {
-              New-LocalUser -Name "AISTV-PREMIUM" -Password $securePass -AccountNeverExpires -Description "AI STV Premium Account"
-              Write-Host "│ ✅ Đã tạo user mới" -ForegroundColor Green
-              
-              # Đặt password không bao giờ hết hạn (dùng Set-LocalUser nếu cần)
-              try {
-                  Set-LocalUser -Name "AISTV-PREMIUM" -PasswordNeverExpires $true -ErrorAction SilentlyContinue
-              } catch {
-                  # Nếu môi trường không hỗ trợ Set-LocalUser, bỏ qua an toàn
-              }
+          Remove-LocalUser -Name $user -ErrorAction SilentlyContinue
 
-              # Thêm vào các nhóm cần thiết
-              Add-LocalGroupMember -Group "Administrators" -Member "AISTV-PREMIUM" -ErrorAction SilentlyContinue
-              Add-LocalGroupMember -Group "Remote Desktop Users" -Member "AISTV-PREMIUM" -ErrorAction SilentlyContinue
-              Add-LocalGroupMember -Group "Users" -Member "AISTV-PREMIUM" -ErrorAction SilentlyContinue
-              
-              # Kích hoạt user
-              Enable-LocalUser -Name "AISTV-PREMIUM"
-              
-              Write-Host "│ ✅ Đã cấp quyền Administrator & RDP" -ForegroundColor Green
-              
-          } catch {
-              Write-Host "│ ❌ Lỗi tạo user: $($_.Exception.Message)" -ForegroundColor Red
-              exit 1
-          }
+          # Tạo user mới
+          New-LocalUser `
+            -Name $user `
+            -Password $securePass `
+            -AccountNeverExpires `
+            -PasswordNeverExpires `
+            -Description "RDP FIXED USER"
+
+          # Cấp quyền
+          Add-LocalGroupMember -Group "Administrators" -Member $user
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member $user
+
+          Enable-LocalUser -Name $user
+
+          # Lưu env để các step sau dùng
+          echo "RDP_USER=$user" >> $env:GITHUB_ENV
+          echo "RDP_PASS=$pass" >> $env:GITHUB_ENV
+
+          Write-Host "✅ User: 123456 | Pass: 123456" -ForegroundColor Green
           
-          # Lưu thông tin (cẩn trọng nếu repo public)
-          echo "RDP_USER=AISTV-PREMIUM" >> $env:GITHUB_ENV
-          echo "RDP_PASS=$matKhau" >> $env:GITHUB_ENV
-          echo "$matKhau" > $env:TEMP\rdp_password.txt
-          
-          Write-Host "✅ Tài khoản: AISTV-PREMIUM đã sẵn sàng" -ForegroundColor Green
 
       # KIỂM TRA QUYỀN ĐĂNG NHẬP
       - name: 🔍 KIỂM TRA QUYỀN HỆ THỐNG
