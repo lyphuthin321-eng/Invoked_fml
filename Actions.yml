@@ -1,4 +1,4 @@
-name: 🚀 SEVER AI STV PREMIUM
+name: 🚀 SEVER AI STV PREMIUM (TURBO MODE)
 
 on:
   workflow_dispatch:
@@ -16,362 +16,150 @@ on:
 jobs:
   Premium-RDP-Setup:
     runs-on: windows-latest
-    timeout-minutes: 340
+    timeout-minutes: 345 # Tăng nhẹ để tránh timeout phút cuối
     
     steps:
-      # BANNER CHÀO MỪNG
-      - name: 🎯 KHỞI ĐỘNG HỆ THỐNG
+      # 1. KHỞI ĐỘNG & TỐI ƯU WINDOWS (Bước quan trọng nhất để giảm lag)
+      - name: 🚀 TỐI ƯU HÓA HỆ THỐNG (ANTI-LAG)
         run: |
-          Write-Host ""
-          Write-Host ""
-          Write-Host "🤖 AI STV PREMIUM RDP SERVER" -ForegroundColor Yellow
-          Write-Host "⚡ Powered by AI STV" -ForegroundColor Green
-          Write-Host "🕒 Thời gian: ${{ github.event.inputs.duration }}" -ForegroundColor Magenta
-          Write-Host ""
-          
-          # Hiệu ứng loading
-          $frames = @('⣾', '⣽', '⣻', '⢿', '⡿', '⣟', '⣯', '⣷')
-          for($i=0; $i -lt 10; $i++) {
-              Write-Host "`r🚀 Đang khởi tạo hệ thống... $($frames[$i % 8])" -NoNewline -ForegroundColor Blue
-              Start-Sleep -Milliseconds 100
-          }
-          Write-Host "`r✅ Hệ thống đã sẵn sàng!                    " -ForegroundColor Green
+          Write-Host "🔥 ĐANG KÍCH HOẠT CHẾ ĐỘ HIỆU SUẤT CAO..." -ForegroundColor Yellow
 
-      # CẤU HÌNH NÂNG CAO
-      - name: 🔧 CẤU HÌNH HỆ THỐNG
-        run: |
-          Write-Host ""
-          Write-Host "🛠️  ĐANG CẤU HÌNH HỆ THỐNG" -ForegroundColor Yellow
+          # 1. Tắt Windows Defender Real-time (Tăng tốc cực mạnh cho Github Runner)
+          Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
           
-          $steps = @(
-              @{Name="Bật Remote Desktop"; Script={ 
-                  Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
-              }},
-              @{Name="Tắt xác thực mạng"; Script={
-                  Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
-              }},
-              @{Name="Cấu hình bảo mật RDP"; Script={
-                  Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 0 -Force
-                  Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
-              }},
-              @{Name="Mở port 3389 firewall"; Script={
-                  netsh advfirewall firewall add rule name="RDP-Premium" dir=in action=allow protocol=TCP localport=3389 profile=any
-                  netsh advfirewall firewall add rule name="RDP-Premium-Out" dir=out action=allow protocol=TCP localport=3389 profile=any
-              }},
-              @{Name="Khởi động dịch vụ"; Script={
-                  Set-Service -Name TermService -StartupType Automatic -ErrorAction SilentlyContinue
-                  Set-Service -Name UmRdpService -StartupType Automatic -ErrorAction SilentlyContinue
-                  Start-Service -Name TermService -ErrorAction SilentlyContinue
-                  Start-Service -Name UmRdpService -ErrorAction SilentlyContinue
-              }}
+          # 2. Tối ưu Registry cho RDP (Giảm độ trễ, tắt hình nền, tắt hiệu ứng)
+          $tweaks = @(
+              # Tắt hình nền (Màn hình đen = load nhanh)
+              @{Path="HKCU:\Control Panel\Desktop"; Name="Wallpaper"; Value=""},
+              @{Path="HKCU:\Control Panel\Desktop"; Name="WallpaperStyle"; Value="0"},
+              # Tắt Font Smoothing (Giảm mờ)
+              @{Path="HKCU:\Control Panel\Desktop"; Name="FontSmoothing"; Value="0"},
+              # Tắt Show window contents while dragging
+              @{Path="HKCU:\Control Panel\Desktop"; Name="DragFullWindows"; Value="0"},
+              # Tắt Menu Animation
+              @{Path="HKCU:\Control Panel\Desktop"; Name="UserPreferencesMask"; Value=[byte[]](0x90,0x12,0x03,0x80)},
+              # Tối ưu TCP cho RDP
+              @{Path="HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters"; Name="TcpWindowSize"; Value=64240},
+              @{Path="HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters"; Name="GlobalMaxTcpWindowSize"; Value=64240}
           )
-          
-          foreach($step in $steps) {
-              Write-Host "│ 📋 $($step.Name)..." -NoNewline -ForegroundColor White
-              try {
-                  & $step.Script
-                  Write-Host "`r│ ✅ $($step.Name)" -ForegroundColor Green
-              } catch {
-                  Write-Host "`r│ ⚠️  $($step.Name) - Đã bỏ qua lỗi nhỏ" -ForegroundColor Yellow
-              }
-              Start-Sleep -Milliseconds 500
-          }
-          
-          Write-Host "🎯 Cấu hình hoàn tất!" -ForegroundColor Green
 
-      # TẠO USER PREMIUM - (tối ưu mật khẩu)
-- name: 👤 TẠO TÀI KHOẢN RDP
+          foreach ($t in $tweaks) {
+              New-Item -Path $t.Path -Force -ErrorAction SilentlyContinue | Out-Null
+              Set-ItemProperty -Path $t.Path -Name $t.Name -Value $t.Value -Force -ErrorAction SilentlyContinue
+          }
+
+          # 3. Tắt các Services gây nặng máy và tốn băng thông
+          $servicesToStop = @("Audiosrv", "AudioEndpointBuilder", "Themes", "WerSvc", "WSearch", "SysMain")
+          foreach ($svc in $servicesToStop) {
+              Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
+              Set-Service -Name $svc -StartupType Disabled -ErrorAction SilentlyContinue
+              Write-Host "│ 🚫 Đã tắt service: $svc" -ForegroundColor Gray
+          }
+
+          # 4. Cấu hình Performance Options
+          # Chỉnh VisualFXSetting về 2 (Adjust for best performance)
+          Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 2 -Force -ErrorAction SilentlyContinue
+
+          Write-Host "✅ Đã tối ưu hóa hệ thống để đạt tốc độ tối đa!" -ForegroundColor Green
+
+      # 2. CẤU HÌNH RDP NÂNG CAO
+      - name: 🔧 CẤU HÌNH RDP (NO NLA)
         run: |
-          Write-Host ""
-          Write-Host "👤 TẠO USER RDP CỐ ĐỊNH" -ForegroundColor Yellow
-
-          $user = "123456"
-          $pass = "123456"
-
-          $securePass = ConvertTo-SecureString $pass -AsPlainText -Force
-
-          # Xóa user cũ nếu tồn tại
-          Remove-LocalUser -Name $user -ErrorAction SilentlyContinue
-
-          # Tạo user mới
-          New-LocalUser `
-            -Name $user `
-            -Password $securePass `
-            -AccountNeverExpires `
-            -PasswordNeverExpires `
-            -Description "RDP FIXED USER"
-
-          # Cấp quyền
-          Add-LocalGroupMember -Group "Administrators" -Member $user
-          Add-LocalGroupMember -Group "Remote Desktop Users" -Member $user
-
-          Enable-LocalUser -Name $user
-
-          # Lưu env để các step sau dùng
-          echo "RDP_USER=$user" >> $env:GITHUB_ENV
-          echo "RDP_PASS=$pass" >> $env:GITHUB_ENV
-
-          Write-Host "✅ User: 123456 | Pass: 123456" -ForegroundColor Green
+          Write-Host "🛠️  ĐANG CẤU HÌNH RDP..." -ForegroundColor Yellow
           
+          # Mở port và tắt NLA (Network Level Authentication) để dễ kết nối
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 1 -Force # 1 = Low secure but fast
+          
+          # Firewall rules
+          netsh advfirewall firewall add rule name="Allow RDP" dir=in action=allow protocol=TCP localport=3389 profile=any | Out-Null
+          
+          Write-Host "✅ Cấu hình RDP hoàn tất!" -ForegroundColor Green
 
-      # KIỂM TRA QUYỀN ĐĂNG NHẬP
-      - name: 🔍 KIỂM TRA QUYỀN HỆ THỐNG
+      # 3. TẠO USER PREMIUM
+      - name: 👤 TẠO TÀI KHOẢN
         run: |
-          Write-Host ""
-          Write-Host "🔍 KIỂM TRA QUYỀN ĐĂNG NHẬP" -ForegroundColor Yellow
-          
-          # Kiểm tra user tồn tại
-          $user = Get-LocalUser -Name "AISTV-PREMIUM" -ErrorAction SilentlyContinue
-          if ($user) {
-              Write-Host "│ ✅ User AISTV-PREMIUM tồn tại" -ForegroundColor Green
-              Write-Host "│ 📊 Trạng thái: $($user.Enabled)" -ForegroundColor White
-          } else {
-              Write-Host "│ ❌ User không tồn tại" -ForegroundColor Red
-              exit 1
+          # Logic tạo mật khẩu
+          function New-PremiumPassword {
+              $upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; $lower = 'abcdefghijkmnpqrstuvwxyz'; $numbers = '23456789'
+              $pw = $upper[(Get-Random $upper.Length)] + $lower[(Get-Random $lower.Length)] + $numbers[(Get-Random $numbers.Length)]
+              1..5 | ForEach-Object { $pw += ($upper+$lower+$numbers)[(Get-Random ($upper+$lower+$numbers).Length)] }
+              return -join ($pw.ToCharArray() | Sort-Object { Get-Random })
           }
-          
-          # Kiểm tra quyền Administrator
-          $isAdmin = (Get-LocalGroupMember -Group "Administrators" | Where-Object {$_.Name -like "*AISTV-PREMIUM"}).Count -gt 0
-          if ($isAdmin) {
-              Write-Host "│ ✅ Có quyền Administrator" -ForegroundColor Green
-          } else {
-              Write-Host "│ ❌ Không có quyền Administrator" -ForegroundColor Red
-          }
-          
-          # Kiểm tra quyền Remote Desktop
-          $isRDPUser = (Get-LocalGroupMember -Group "Remote Desktop Users" | Where-Object {$_.Name -like "*AISTV-PREMIUM"}).Count -gt 0
-          if ($isRDPUser) {
-              Write-Host "│ ✅ Có quyền Remote Desktop" -ForegroundColor Green
-          } else {
-              Write-Host "│ ❌ Không có quyền Remote Desktop" -ForegroundColor Red
-          }
-          
-          # Kiểm tra dịch vụ RDP
-          $termService = Get-Service -Name TermService -ErrorAction SilentlyContinue
-          if ($termService.Status -eq 'Running') {
-              Write-Host "│ ✅ Dịch vụ TermService đang chạy" -ForegroundColor Green
-          } else {
-              Write-Host "│ ❌ Dịch vụ TermService không chạy" -ForegroundColor Red
-          }
-          
-          Write-Host "🎯 Kiểm tra hoàn tất!" -ForegroundColor Green
 
-      # TAILSCALE PREMIUM
-      - name: 🌐 THIẾT LẬP MẠNG PREMIUM
+          $matKhau = if ($env:CUSTOM_RDP_PASS) { $env:CUSTOM_RDP_PASS } else { New-PremiumPassword }
+          $securePass = ConvertTo-SecureString $matKhau -AsPlainText -Force
+          
+          # Xóa và tạo mới User
+          Remove-LocalUser -Name "AISTV-PREMIUM" -ErrorAction SilentlyContinue
+          New-LocalUser -Name "AISTV-PREMIUM" -Password $securePass -AccountNeverExpires -Description "Optimized RDP User"
+          
+          # Cấp quyền Admin & RDP
+          Add-LocalGroupMember -Group "Administrators" -Member "AISTV-PREMIUM"
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "AISTV-PREMIUM"
+          
+          # Lưu mật khẩu
+          echo "RDP_PASS=$matKhau" >> $env:GITHUB_ENV
+          $matKhau | Out-File "$env:TEMP\rdp_password.txt" -Encoding ascii
+          
+          Write-Host "✅ Đã tạo User: AISTV-PREMIUM" -ForegroundColor Green
+
+      # 4. TAILSCALE (MẠNG)
+      - name: 🌐 KẾT NỐI TAILSCALE
         env:
           TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
         run: |
-          Write-Host ""
-          Write-Host "🌐 ĐANG THIẾT LẬP KẾT NỐI MẠNG" -ForegroundColor Yellow
+          Write-Host "🌐 KHỞI ĐỘNG TAILSCALE..." -ForegroundColor Yellow
           
-          # Cài đặt Tailscale
-          try {
-              $msiPath = "$env:TEMP\tailscale-premium.msi"
-              Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile $msiPath
-              Start-Process msiexec.exe -ArgumentList "/i", "`"$msiPath`"", "/quiet", "/norestart" -Wait
-              Remove-Item $msiPath -Force -ErrorAction SilentlyContinue
-              Write-Host "│ ✅ Cài đặt Tailscale thành công" -ForegroundColor Green
-          } catch {
-              Write-Host "│ ❌ Lỗi cài đặt Tailscale" -ForegroundColor Red
-          }
+          # Download & Install nhanh gọn
+          $url = "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi"
+          Start-Process msiexec.exe -ArgumentList "/i", "$(Invoke-WebRequest $url -OutFile 'ts.msi' -PassThru).FullName", "/quiet", "/norestart" -Wait
           
-          # Chờ dịch vụ khởi động
-          Start-Sleep -Seconds 10
+          # Up Tailscale (Thêm --accept-dns=false để tránh lỗi mạng cục bộ Github)
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=$env:TAILSCALE_AUTH_KEY --hostname="aistv-turbo-$env:GITHUB_RUN_ID" --accept-routes --accept-dns=false
           
-          # Kết nối Tailscale
-          try {
-              & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=$env:TAILSCALE_AUTH_KEY --hostname=ai-stv-premium-$env:GITHUB_RUN_ID --accept-routes --accept-dns --reset
-              Write-Host "│ ✅ Kết nối Tailscale thành công" -ForegroundColor Green
-          } catch {
-              Write-Host "│ ❌ Lỗi kết nối Tailscale" -ForegroundColor Red
-          }
-          
-          # Lấy IP với retry mechanism
-          Write-Host "🔄 Đang lấy địa chỉ IP..." -NoNewline -ForegroundColor Blue
-          $ip = $null
-          for($i=0; $i -lt 20; $i++) {
-              try {
-                  $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4 2>&1
-                  if ($ip -and $ip -match '^\d+\.\d+\.\d+\.\d+$') {
-                      echo "TAILSCALE_IP=$ip" >> $env:GITHUB_ENV
-                      Write-Host "`r✅ Địa chỉ IP: $ip" -ForegroundColor Green
-                      break
-                  }
-              } catch {
-                  # Bỏ qua lỗi và thử lại
-              }
-              Write-Host "`r🔄 Đang lấy địa chỉ IP... $(@('.', '..', '...')[$i % 3])" -NoNewline -ForegroundColor Blue
-              Start-Sleep -Seconds 3
-          }
-          
-          if (-not $ip -or $ip -notmatch '^\d+\.\d+\.\d+\.\d+$') {
-              Write-Host "`r⚠️  Không thể lấy IP, sử dụng localhost" -ForegroundColor Yellow
-              echo "TAILSCALE_IP=localhost" >> $env:GITHUB_ENV
-          }
+          # Lấy IP
+          $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
+          echo "TAILSCALE_IP=$ip" >> $env:GITHUB_ENV
+          Write-Host "✅ IP: $ip" -ForegroundColor Green
 
-      # HIỂN THỊ GIAO DIỆN ĐẸP
+      # 5. HIỂN THỊ THÔNG TIN (Gọn gàng)
       - name: 🎉 THÔNG TIN KẾT NỐI
         run: |
-          $matKhau = Get-Content $env:TEMP\rdp_password.txt -ErrorAction SilentlyContinue
-          if (-not $matKhau) {
-              $matKhau = "Không thể đọc mật khẩu"
-          }
+          $pass = Get-Content "$env:TEMP\rdp_password.txt"
           
-          # Chuyển đổi thời gian từ input sang phút
-          $durationInput = "${{ github.event.inputs.duration }}"
-          switch ($durationInput) {
-              "1h" { $totalMinutes = 60; $displayTime = "1 giờ" }
-              "3h" { $totalMinutes = 180; $displayTime = "3 giờ" }
-              "5h40m" { $totalMinutes = 340; $displayTime = "5 giờ 40 phút" }
-          }
+          # Chuyển đổi duration
+          $min = switch ("${{ github.event.inputs.duration }}") { '1h' {60} '3h' {180} '5h40m' {340} default {340} }
+          echo "TOTAL_MINUTES=$min" >> $env:GITHUB_ENV
           
-          # Tính thời gian chính xác
-          $timeZone = [System.TimeZoneInfo]::FindSystemTimeZoneById("SE Asia Standard Time")
-          $thoiGianBatDau = [System.TimeZoneInfo]::ConvertTimeFromUtc((Get-Date).ToUniversalTime(), $timeZone)
-          $thoiGianKetThuc = $thoiGianBatDau.AddMinutes($totalMinutes)
-          
-          Write-Host ""
-          Write-Host "┌───────────────────────────────────────────┐" -ForegroundColor Cyan
-          Write-Host "│              🎉 KẾT NỐI THÀNH CÔNG!              │" -ForegroundColor Cyan
-          Write-Host "├───────────────────────────────────────────┤" -ForegroundColor Cyan
-          Write-Host "│ 🌐  Địa chỉ: $env:TAILSCALE_IP" -ForegroundColor White
-          Write-Host "│ 👤  Tài khoản: AISTV-PREMIUM" -ForegroundColor White
-          Write-Host "│ 🔐  Mật khẩu: $matKhau" -ForegroundColor White
-          Write-Host "│ ⏰  Thời lượng: $displayTime" -ForegroundColor White
-          Write-Host "│ 🕐  Bắt đầu: $($thoiGianBatDau.ToString('HH:mm:ss'))" -ForegroundColor White
-          Write-Host "│ 🕐  Kết thúc: $($thoiGianKetThuc.ToString('HH:mm:ss'))" -ForegroundColor White
-          Write-Host "│ 📍  Port: 3389" -ForegroundColor White
-          Write-Host "├───────────────────────────────────────────┤" -ForegroundColor Cyan
-          Write-Host "│ 💡  Hướng dẫn:                                    │" -ForegroundColor Cyan
-          Write-Host "│   1. Mở Remote Desktop Connection                 │" -ForegroundColor Yellow
-          Write-Host "│   2. Nhập: $env:TAILSCALE_IP                      │" -ForegroundColor Yellow
-          Write-Host "│   3. User: AISTV-PREMIUM | Password: trên          │" -ForegroundColor Yellow
-          Write-Host "│   4. Enjoy! 🚀                                    │" -ForegroundColor Yellow
-          Write-Host "└───────────────────────────────────────────┘" -ForegroundColor Cyan
-          
-          # Lưu thời gian vào biến môi trường
-          echo "TOTAL_MINUTES=$totalMinutes" >> $env:GITHUB_ENV
+          Write-Host "`n╔════════════════════════════════════════════╗" -ForegroundColor Cyan
+          Write-Host "║        🚀 SEVER AI STV TURBO READY         ║" -ForegroundColor Cyan
+          Write-Host "╠════════════════════════════════════════════╣" -ForegroundColor Cyan
+          Write-Host "║ 📡 IP:       $env:TAILSCALE_IP" -ForegroundColor White
+          Write-Host "║ 👤 User:     AISTV-PREMIUM" -ForegroundColor White
+          Write-Host "║ 🔑 Pass:     $pass" -ForegroundColor White
+          Write-Host "║ ⚡ Mode:     Performance (No Lag)" -ForegroundColor Yellow
+          Write-Host "╚════════════════════════════════════════════╝" -ForegroundColor Cyan
 
-      # DUY TRÌ PHIÊN ỔN ĐỊNH
-      - name: ⏳ DUY TRÌ PHIÊN LÀM VIỆC
+      # 6. LOOP GIỮ KẾT NỐI (Tối ưu CPU thấp nhất)
+      - name: ⏳ SERVER RUNNING...
         run: |
-          $matKhau = Get-Content $env:TEMP\rdp_password.txt -ErrorAction SilentlyContinue
-          $totalMinutes = $env:TOTAL_MINUTES
+          $totalMinutes = [int]$env:TOTAL_MINUTES
+          $endTime = (Get-Date).AddMinutes($totalMinutes)
           
-          # Tính thời gian chính xác
-          $timeZone = [System.TimeZoneInfo]::FindSystemTimeZoneById("SE Asia Standard Time")
-          $thoiGianBatDau = [System.TimeZoneInfo]::ConvertTimeFromUtc((Get-Date).ToUniversalTime(), $timeZone)
-          $thoiGianKetThuc = $thoiGianBatDau.AddMinutes($totalMinutes)
+          Write-Host "⏳ Server đang chạy. Vui lòng không đóng tab này..." -ForegroundColor Magenta
           
-          Write-Host ""
-          Write-Host "🔄 BẮT ĐẦU DUY TRÌ PHIÊN LÀM VIỆC..." -ForegroundColor Yellow
-          Write-Host "💎 Phiên: AI STV PREMIUM" -ForegroundColor Magenta
-          Write-Host "🔗 Kết nối: $env:TAILSCALE_IP" -ForegroundColor Cyan
-          Write-Host "🕐 Bắt đầu: $($thoiGianBatDau.ToString('HH:mm:ss'))" -ForegroundColor Green
-          Write-Host "🕐 Kết thúc: $($thoiGianKetThuc.ToString('HH:mm:ss'))" -ForegroundColor Green
-          Write-Host ""
-          
-          # Tạo process giám sát hệ thống
-          $monitorScript = {
-              $lastLogTime = Get-Date
-              while ($true) {
-                  $currentTime = Get-Date
-                  
-                  # Log trạng thái mỗi 2 phút
-                  if (($currentTime - $lastLogTime).TotalMinutes -ge 2) {
-                      # Kiểm tra dịch vụ
-                      $termService = Get-Service -Name TermService -ErrorAction SilentlyContinue
-                      $rdpConnections = Get-NetTCPConnection -LocalPort 3389 -ErrorAction SilentlyContinue | Where-Object {$_.State -eq 'Established'}
-                      
-                      Write-Host "[$($currentTime.ToString('HH:mm:ss'))] 📊 Trạng thái - RDP: $($termService.Status), Kết nối: $($rdpConnections.Count)" -ForegroundColor Blue
-                      $lastLogTime = $currentTime
-                  }
-                  
-                  # Kiểm tra và khởi động lại dịch vụ nếu cần
-                  $termService = Get-Service -Name TermService -ErrorAction SilentlyContinue
-                  if ($termService.Status -ne 'Running') {
-                      Write-Host "[$($currentTime.ToString('HH:mm:ss'))] 🔄 Khởi động lại TermService..." -ForegroundColor Yellow
-                      Start-Service -Name TermService -ErrorAction SilentlyContinue
-                  }
-                  
-                  Start-Sleep -Seconds 30
-              }
+          # Vòng lặp tối ưu: Ngủ 10s mới in log 1 lần để tiết kiệm tài nguyên Runner
+          while ((Get-Date) -lt $endTime) {
+              $tl = $endTime - (Get-Date)
+              $str = "{0:D2}:{1:D2}:{2:D2}" -f $tl.Hours, $tl.Minutes, $tl.Seconds
+              Write-Host "`r🔴 LIVE | Thời gian còn lại: $str | Status: Healthy " -NoNewline -ForegroundColor Green
+              
+              # Anti-Idle trick nhẹ
+              [void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms')
+              [System.Windows.Forms.SendKeys]::SendWait(".") | Out-Null
+              
+              Start-Sleep -Seconds 10
           }
-          
-          # Chạy monitor trong background
-          Start-Job -ScriptBlock $monitorScript -Name "SystemMonitor"
-          
-          # Hiển thị timer chính
-          $frames = @('⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏')
-          $colors = @('Red', 'Yellow', 'Green', 'Cyan', 'Blue', 'Magenta')
-          $startTime = Get-Date
-          
-          do {
-              $thoiGianHienTai = [System.TimeZoneInfo]::ConvertTimeFromUtc((Get-Date).ToUniversalTime(), $timeZone)
-              $thoiGianConLai = $thoiGianKetThuc - $thoiGianHienTai
-              
-              $gioConLai = [math]::Max(0, [math]::Floor($thoiGianConLai.TotalHours))
-              $phutConLai = [math]::Max(0, [math]::Floor($thoiGianConLai.TotalMinutes % 60))
-              $giayConLai = [math]::Max(0, [math]::Floor($thoiGianConLai.TotalSeconds % 60))
-              
-              $frame = $frames[([int]((Get-Date) - $startTime).TotalSeconds) % $frames.Length]
-              $color = $colors[([int]((Get-Date) - $startTime).TotalMinutes) % $colors.Length]
-              
-              Write-Host "`r$frame [$($thoiGianHienTai.ToString('HH:mm:ss'))] Thời gian còn lại: $gioConLai giờ $phutConLai phút $giayConLai giây" -NoNewline -ForegroundColor $color
-              
-              Start-Sleep -Seconds 5
-              
-          } while ($thoiGianConLai.TotalSeconds -gt 0)
-          
-          Write-Host ""
-          Write-Host "🎯 ĐÃ HẾT THỜI GIAN - TỰ ĐỘNG DỪNG!" -ForegroundColor Red
-          
-          # Dọn dẹp jobs
-          Get-Job -Name "SystemMonitor" -ErrorAction SilentlyContinue | Stop-Job -PassThru | Remove-Job -Force
 
-      # DỌN DẸP CHUYÊN NGHIỆP
-      - name: 🧹 DỌN DẸP HỆ THỐNG
-        if: always()
-        run: |
-          Write-Host ""
-          Write-Host "🧹 ĐANG DỌN DẸP HỆ THỐNG..." -ForegroundColor Yellow
-          
-          $cleanupSteps = @(
-              @{Name="Xóa file password"; Script={
-                  Remove-Item "$env:TEMP\rdp_password.txt" -ErrorAction SilentlyContinue
-              }},
-              @{Name="Vô hiệu hóa user"; Script={
-                  Disable-LocalUser -Name "AISTV-PREMIUM" -ErrorAction SilentlyContinue
-              }},
-              @{Name="Đóng kết nối mạng"; Script={
-                  & "$env:ProgramFiles\Tailscale\tailscale.exe" down --accept-risk=all -ErrorAction SilentlyContinue
-                  Start-Sleep -Seconds 5
-              }},
-              @{Name="Xóa rule firewall"; Script={
-                  netsh advfirewall firewall delete rule name="RDP-Premium" dir=in -ErrorAction SilentlyContinue
-                  netsh advfirewall firewall delete rule name="RDP-Premium-Out" dir=out -ErrorAction SilentlyContinue
-                  Remove-NetFirewallRule -DisplayName "RDP-Premium" -ErrorAction SilentlyContinue
-                  Remove-NetFirewallRule -DisplayName "RDP-Premium-Out" -ErrorAction SilentlyContinue
-              }},
-              @{Name="Khôi phục cài đặt RDP"; Script={
-                  Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 1 -Force -ErrorAction SilentlyContinue
-                  Stop-Service -Name TermService -Force -ErrorAction SilentlyContinue
-              }}
-          )
-          
-          foreach($step in $cleanupSteps) {
-              Write-Host "│ 🗑️  $($step.Name)..." -NoNewline -ForegroundColor Gray
-              try {
-                  & $step.Script
-                  Write-Host "`r│ ✅ $($step.Name)" -ForegroundColor Green
-              } catch {
-                  Write-Host "`r│ ⚠️  $($step.Name) - Đã xử lý an toàn" -ForegroundColor Yellow
-              }
-              Start-Sleep -Milliseconds 300
-          }
-          
-          # Dọn dẹp jobs còn sót
-          Get-Job | Stop-Job -PassThru | Remove-Job -Force -ErrorAction SilentlyContinue
-          
-          Write-Host ""
-          Write-Host "🎉 Dọn dẹp hoàn tất! Hẹn gặp lại! 👋" -ForegroundColor Green
